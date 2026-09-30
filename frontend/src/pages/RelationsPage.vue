@@ -123,6 +123,27 @@ async function remove(relation: Relation): Promise<void> {
   ElMessage.success('关系已删除')
 }
 
+/** 整理员定夺：确认挂起的跨方关系有效，重新校验环路与深度后写入关系图 */
+async function confirmPending(relation: Relation): Promise<void> {
+  const others = relationState.relations.filter((item) => item.id !== relation.id && !item.pending)
+  if (checkRelationCycle(others, { unitAId: relation.unitAId, unitBId: relation.unitBId, type: relation.type })) {
+    ElMessage.warning('该关系仍会与现有层位关系绕成闭合环路，已保留挂起，请复核后再定夺')
+    return
+  }
+  if (relation.type !== '共存') {
+    const a = stratumState.strata.find((item) => item.id === relation.unitAId)
+    const b = stratumState.strata.find((item) => item.id === relation.unitBId)
+    if (a && b && a.topDepth > b.topDepth) {
+      ElMessage.warning(
+        `该关系仍与深度矛盾：${a.code} 上界（${a.topDepth} m）深于 ${b.code}（${b.topDepth} m），已保留挂起`
+      )
+      return
+    }
+  }
+  await relationStore.getState().save({ ...relation, pending: false, pendingReason: '' })
+  ElMessage.success('已确认并写入层位关系图')
+}
+
 function selectNode(nodeId: string): void {
   activeId.value = activeId.value === nodeId ? null : nodeId
 }
@@ -232,13 +253,22 @@ function selectNode(nodeId: string): void {
         <el-card shadow="never" class="list-card">
           <template #header>关系清单（{{ relationState.relations.length }}）</template>
           <ul class="rel-list">
-            <li v-for="relation in relationState.relations" :key="relation.id">
+            <li v-for="relation in relationState.relations" :key="relation.id" :class="{ pending: relation.pending }">
               <span class="mono">{{ unitLabel(relation.unitAId) }}</span>
               <el-tag size="small" effect="dark" class="type">{{ relation.type }}</el-tag>
               <span class="mono">{{ unitLabel(relation.unitBId) }}</span>
+              <el-tag v-if="relation.pending" type="warning" size="small" effect="dark" class="type">
+                待整理员定夺
+              </el-tag>
               <span class="muted">（{{ relation.basis }} · {{ relation.recorder || '未填记录人' }}）</span>
+              <p v-if="relation.pending && relation.pendingReason" class="pending-reason">
+                挂起原因：{{ relation.pendingReason }}
+              </p>
               <span class="ops">
-                <el-button link type="primary" size="small" @click="edit(relation)">编辑</el-button>
+                <el-button v-if="relation.pending" link type="success" size="small" @click="confirmPending(relation)">
+                  确认有效
+                </el-button>
+                <el-button v-if="!relation.pending" link type="primary" size="small" @click="edit(relation)">编辑</el-button>
                 <el-button link type="danger" size="small" @click="remove(relation)">删除</el-button>
               </span>
             </li>
@@ -308,5 +338,16 @@ function selectNode(nodeId: string): void {
 }
 .ops {
   margin-left: auto;
+}
+.rel-list li.pending {
+  background: #fdf6ec;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.pending-reason {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #b88230;
 }
 </style>

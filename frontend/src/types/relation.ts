@@ -17,4 +17,8 @@ export interface Relation {
   basis: RelationBasis
   recorder: string
   note: string
+  /** 是否挂起等待整理员定夺（跨探方关系合入后可能绕成圈或与深度矛盾，先不写入关系图） */
+  pending?: boolean
+  /** 挂起原因（定夺提示） */
+  pendingReason?: string
 }

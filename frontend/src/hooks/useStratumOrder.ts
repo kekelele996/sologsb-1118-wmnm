@@ -47,7 +47,9 @@ export function useStratumOrder(strata: Ref<Stratum[]>, relations: Ref<Relation[
     })
 
     const conflicts: string[] = []
-    relations.value.forEach((relation) => {
+    relations.value
+      .filter((item) => !item.pending)
+      .forEach((relation) => {
       if (relation.type === '共存') return
       const a = strata.value.find((item) => item.id === relation.unitAId)
       const b = strata.value.find((item) => item.id === relation.unitBId)

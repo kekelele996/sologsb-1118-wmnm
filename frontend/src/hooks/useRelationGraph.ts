@@ -21,7 +21,7 @@ export function useRelationGraph(
   relations: Ref<Relation[]>,
   activeId: Ref<string | null>
 ): RelationGraphResult {
-  const graph = computed<DirectedGraph>(() => buildGraph(strata.value, relations.value))
+  const graph = computed<DirectedGraph>(() => buildGraph(strata.value, relations.value.filter((item) => !item.pending)))
   const highlighted = computed<Set<string>>(() => highlightSubgraph(graph.value, activeId.value))
   const degreeOf = (nodeId: string): number => {
     const outgoing = graph.value.adjacency.get(nodeId)?.length ?? 0

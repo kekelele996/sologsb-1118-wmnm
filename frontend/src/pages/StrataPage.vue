@@ -273,10 +273,13 @@ async function applyBatchType(): Promise<void> {
           <span class="mono">{{ trenchLabel(row.trenchId) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="单位号" width="110">
+      <el-table-column label="单位号" width="130">
         <template #default="{ row }: { row: Stratum }">
           <span class="mono">{{ row.code }}</span>
           <el-tag v-if="duplicatedOf(row)" type="warning" size="small" effect="dark" class="mini">重复</el-tag>
+          <el-tag v-if="row.formerCode" type="info" size="small" effect="plain" class="mini"
+            >曾用 {{ row.formerCode }}</el-tag
+          >
         </template>
       </el-table-column>
       <el-table-column label="类型" width="120">

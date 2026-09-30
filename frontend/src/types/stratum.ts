@@ -12,6 +12,8 @@ export interface Stratum {
   trenchId: string
   /** 单位号，如 H12、L03 */
   code: string
+  /** 曾用号：探方合并重排前的原单位号（撞号重排后保留原号以便追溯） */
+  formerCode?: string
   type: UnitType
   /** 开口层位 */
   openLayer: string

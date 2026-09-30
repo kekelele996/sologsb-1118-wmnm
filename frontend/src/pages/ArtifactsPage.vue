@@ -20,6 +20,7 @@ const pickTrenchId = ref('')
 const pickStratumId = ref('')
 const filterCategory = ref<ArtifactCategory | ''>('')
 const filterTrenchId = ref('')
+const filterKeyword = ref('')
 const editingId = ref<string | null>(null)
 
 const form = reactive({
@@ -80,6 +81,11 @@ const visible = computed(() =>
     if (filterTrenchId.value) {
       const stratum = stratumState.strata.find((row) => row.id === item.stratumId)
       if (!stratum || stratum.trenchId !== filterTrenchId.value) return false
+    }
+    if (filterKeyword.value.trim()) {
+      const keyword = filterKeyword.value.trim().toUpperCase()
+      const haystack = `${item.code} ${item.collector} ${item.tempLocation}`.toUpperCase()
+      if (!haystack.includes(keyword)) return false
     }
     return true
   })
@@ -298,6 +304,14 @@ function exportList(): void {
     </el-card>
 
     <div class="toolbar">
+      <el-input
+        v-model="filterKeyword"
+        placeholder="按器物编号 / 提取人 / 临时存放检索（标签不重写，按原号找器物）"
+        clearable
+        style="width: 360px"
+      >
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
       <el-select v-model="filterTrenchId" placeholder="全部探方" clearable style="width: 190px">
         <el-option v-for="trench in trenchState.trenches" :key="trench.id" :label="`${trench.area} · ${trench.code}`" :value="trench.id" />
       </el-select>
