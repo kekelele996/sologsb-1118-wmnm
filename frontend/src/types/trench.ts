@@ -22,6 +22,8 @@ export interface Trench {
   wallNote: string
   /** 是否已回填 */
   backfilled: boolean
+  /** 合并进来的原探方号（探方合并后留存的审计痕迹） */
+  mergedFromCodes?: string[]
 }
 
 /** 探方唯一键：发掘区-探方号 */

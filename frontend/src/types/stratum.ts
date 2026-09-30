@@ -27,6 +27,8 @@ export interface Stratum {
   date: string
   /** 绘图与拍照编号 */
   drawingNo: string
+  /** 曾用单位号（探方合并撞号重排后保留，格式「原探方号:原单位号」，如 T0502:L01） */
+  formerCodes?: string[]
 }
 
 /** 厚度（米） */

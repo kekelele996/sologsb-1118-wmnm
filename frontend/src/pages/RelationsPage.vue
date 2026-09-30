@@ -10,11 +10,14 @@ import { checkRelationCycle, useRelationGraph } from '@/hooks/useRelationGraph'
 import { relationStore } from '@/stores/relationStore'
 import { stratumStore } from '@/stores/stratumStore'
 import { trenchStore } from '@/stores/trenchStore'
+import { mergeStore } from '@/stores/mergeStore'
+import { reviewDepthNote } from '@/utils/mergePlan'
 import { uid } from '@/utils/id'
 
 const relationState = useStore(relationStore)
 const stratumState = useStore(stratumStore)
 const trenchState = useStore(trenchStore)
+const mergeState = useStore(mergeStore)
 
 const filterTrenchId = ref('')
 const activeId = ref<string | null>(null)
@@ -126,6 +129,51 @@ async function remove(relation: Relation): Promise<void> {
 function selectNode(nodeId: string): void {
   activeId.value = activeId.value === nodeId ? null : nodeId
 }
+
+/** 探方合并隔离出来的跨方关系，等整理员裁定（不计入关系图） */
+const pendingReviews = computed(() => mergeState.reviews.filter((item) => item.status === 'pending'))
+
+function reviewJobLabel(mergeJobId: string): string {
+  const job = mergeState.mergeJobs.find((item) => item.id === mergeJobId)
+  return job ? `${job.keeperCode} ← ${job.absorbedCode}` : '已删除的合并任务'
+}
+
+const warningMeta: Record<string, { label: string; type: 'danger' | 'warning' | 'info' }> = {
+  cycle: { label: '可能绕成环路', type: 'danger' },
+  depthConflict: { label: '与深度对不上', type: 'warning' },
+  duplicate: { label: '与已有关系重复', type: 'info' }
+}
+
+async function accept(reviewId: string): Promise<void> {
+  const review = pendingReviews.value.find((item) => item.id === reviewId)
+  if (!review) return
+  const depthNote = reviewDepthNote(review, stratumState.strata)
+  if (depthNote) {
+    try {
+      await ElMessageBox.confirm(
+        `${depthNote}。跨方关系由整理员最终定夺，仍要采纳写入关系图吗？`,
+        '深度矛盾确认',
+        { type: 'warning', confirmButtonText: '仍要采纳', cancelButtonText: '再想想' }
+      )
+    } catch {
+      return
+    }
+  }
+  const result = await mergeStore.getState().acceptReview(reviewId)
+  if (!result.ok) {
+    ElMessage.error(`无法采纳：${result.reason}`)
+    return
+  }
+  ElMessage.success('跨方关系已采纳并写入关系图')
+}
+
+async function discard(reviewId: string): Promise<void> {
+  await ElMessageBox.confirm('放弃后该跨方关系不会写入关系图（记录保留处置痕迹），确认放弃？', '放弃跨方关系', {
+    type: 'warning'
+  })
+  await mergeStore.getState().discardReview(reviewId)
+  ElMessage.success('已放弃该跨方关系')
+}
 </script>
 
 <template>
@@ -158,6 +206,55 @@ function selectNode(nodeId: string): void {
       show-icon
       title="当前层位关系无环路矛盾"
     />
+
+    <el-card v-if="pendingReviews.length > 0" shadow="never" class="review-card">
+      <template #header>
+        <div class="review-head">
+          <span>跨方关系待裁定（{{ pendingReviews.length }}）</span>
+          <span class="muted">
+            来自探方合并，系统未写入关系图；可能绕成圈或与深度对不上的已标出，由整理员逐条采纳或放弃
+          </span>
+        </div>
+      </template>
+      <el-table :data="pendingReviews" border size="small">
+        <el-table-column label="合并来源" width="150">
+          <template #default="{ row }">{{ reviewJobLabel(row.mergeJobId) }}</template>
+        </el-table-column>
+        <el-table-column label="单位 A" min-width="150">
+          <template #default="{ row }"><span class="mono">{{ unitLabel(row.unitAId) }}</span></template>
+        </el-table-column>
+        <el-table-column label="关系" width="80">
+          <template #default="{ row }">
+            <el-tag size="small" effect="dark">{{ row.type }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="单位 B" min-width="150">
+          <template #default="{ row }"><span class="mono">{{ unitLabel(row.unitBId) }}</span></template>
+        </el-table-column>
+        <el-table-column label="风险预判" width="220">
+          <template #default="{ row }">
+            <el-tag
+              v-for="kind in row.warnings"
+              :key="kind"
+              size="small"
+              :type="warningMeta[kind].type"
+              effect="plain"
+              class="warn-tag"
+            >
+              {{ warningMeta[kind].label }}
+            </el-tag>
+            <span v-if="row.warnings.length === 0" class="muted">无明显风险</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="note" label="原始备注" min-width="160" show-overflow-tooltip />
+        <el-table-column label="处置" width="150" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="accept(row.id)">采纳</el-button>
+            <el-button link type="danger" size="small" @click="discard(row.id)">放弃</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
     <div class="layout">
       <el-card shadow="never" class="graph-card">
@@ -253,6 +350,18 @@ function selectNode(nodeId: string): void {
 <style scoped>
 .alert {
   margin-bottom: 14px;
+}
+.review-card {
+  margin-bottom: 16px;
+  border-radius: 12px;
+}
+.review-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.warn-tag {
+  margin-right: 4px;
 }
 .layout {
   display: flex;

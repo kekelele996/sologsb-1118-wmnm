@@ -20,6 +20,8 @@ const pickTrenchId = ref('')
 const pickStratumId = ref('')
 const filterCategory = ref<ArtifactCategory | ''>('')
 const filterTrenchId = ref('')
+/** 关键词检索：器物编号、地层单位现号、曾用号都可命中（实物标签不重写，靠旧号也能找到东西） */
+const filterKeyword = ref('')
 const editingId = ref<string | null>(null)
 
 const form = reactive({
@@ -67,6 +69,11 @@ function stratumOf(stratumId: string): string {
   return stratumState.strata.find((item) => item.id === stratumId)?.code ?? '未知单位'
 }
 
+/** 器物所属地层单位（用于曾用号展示与关键词检索） */
+function stratumRecord(stratumId: string) {
+  return stratumState.strata.find((item) => item.id === stratumId) ?? null
+}
+
 function trenchOf(stratumId: string): string {
   const stratum = stratumState.strata.find((item) => item.id === stratumId)
   if (!stratum) return '未知探方'
@@ -77,9 +84,18 @@ function trenchOf(stratumId: string): string {
 const visible = computed(() =>
   artifactState.artifacts.filter((item) => {
     if (filterCategory.value && item.category !== filterCategory.value) return false
+    const stratum = stratumState.strata.find((row) => row.id === item.stratumId)
     if (filterTrenchId.value) {
-      const stratum = stratumState.strata.find((row) => row.id === item.stratumId)
       if (!stratum || stratum.trenchId !== filterTrenchId.value) return false
+    }
+    const keyword = filterKeyword.value.trim().toUpperCase()
+    if (keyword) {
+      const haystacks = [
+        item.code,
+        stratum?.code ?? '',
+        ...(stratum?.formerCodes ?? [])
+      ].map((text) => text.toUpperCase())
+      if (!haystacks.some((text) => text.includes(keyword))) return false
     }
     return true
   })
@@ -304,6 +320,14 @@ function exportList(): void {
       <el-select v-model="filterCategory" placeholder="全部类别" clearable style="width: 130px">
         <el-option v-for="item in ARTIFACT_CATEGORIES" :key="item" :label="item" :value="item" />
       </el-select>
+      <el-input
+        v-model="filterKeyword"
+        placeholder="按器物编号 / 单位号 / 曾用号检索（标签旧号也能找到）"
+        clearable
+        style="width: 340px"
+      >
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
       <el-tag type="info" effect="plain">命中 {{ visible.length }} 条 · 合计 {{ totalCount }} 件</el-tag>
     </div>
 
@@ -314,9 +338,17 @@ function exportList(): void {
           <span class="mono">{{ trenchOf(row.stratumId) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="地层单位" width="110">
+      <el-table-column label="地层单位" min-width="150">
         <template #default="{ row }: { row: Artifact }">
           <span class="mono">{{ stratumOf(row.stratumId) }}</span>
+          <el-tooltip
+            v-for="former in stratumRecord(row.stratumId)?.formerCodes ?? []"
+            :key="former"
+            :content="`该单位曾用号 ${former}，旧记录与实物标签可按此号对应`"
+            placement="top"
+          >
+            <el-tag size="small" type="info" effect="plain" class="former-tag">{{ former }}</el-tag>
+          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column label="深度区间" width="240">
@@ -368,5 +400,9 @@ function exportList(): void {
 }
 .actions {
   padding-left: 100px;
+}
+.former-tag {
+  margin-left: 4px;
+  font-size: 10px;
 }
 </style>

@@ -65,7 +65,7 @@ function trenchLabel(id: string): string {
         <el-option
           v-for="unit in units"
           :key="unit.id"
-          :label="`${unit.code}（${unit.type} · ${unit.topDepth}–${unit.bottomDepth} m）`"
+          :label="`${unit.code}${(unit.formerCodes?.length ?? 0) > 0 ? `（曾用号 ${unit.formerCodes!.join('、')}）` : ''}（${unit.type} · ${unit.topDepth}–${unit.bottomDepth} m）`"
           :value="unit.id"
         />
       </el-select>
@@ -74,6 +74,9 @@ function trenchLabel(id: string): string {
       <template v-if="selected">
         已锁定：{{ trenchLabel(selected.trenchId) }} · {{ selected.code }}（{{ selected.type }}）· 深度
         {{ selected.topDepth }}–{{ selected.bottomDepth }} m · 包含物 {{ selected.inclusions.join('、') || '无' }}
+        <template v-if="selected.formerCodes && selected.formerCodes.length > 0">
+          · 曾用号 <b>{{ selected.formerCodes.join('、') }}</b>
+        </template>
       </template>
       <template v-else>尚未选择地层单位（共 {{ units.length }} 个候选）</template>
     </p>

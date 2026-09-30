@@ -6,3 +6,14 @@ export { ARTIFACT_CATEGORIES, COMPLETENESS } from './artifact'
 export type { Artifact, ArtifactCategory, Completeness } from './artifact'
 export { RELATION_TYPES, RELATION_BASES } from './relation'
 export type { Relation, RelationType, RelationBasis } from './relation'
+export type {
+  MergeJob,
+  MergeJobStatus,
+  MergeSnapshot,
+  RelationReview,
+  ReviewStatus,
+  ReviewWarning,
+  ReviewWarningKind,
+  PlannedReview,
+  StratumRemap
+} from './merge'

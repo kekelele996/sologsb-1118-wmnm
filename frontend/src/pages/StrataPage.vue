@@ -160,7 +160,11 @@ async function submit(): Promise<void> {
     inclusions: [...form.inclusions],
     formation: form.formation.trim(),
     date: form.date,
-    drawingNo: form.drawingNo.trim()
+    drawingNo: form.drawingNo.trim(),
+    // 编辑时保留合并留下的曾用号，不会因修改记录而丢失
+    formerCodes: editingId.value
+      ? stratumState.strata.find((item) => item.id === editingId.value)?.formerCodes ?? []
+      : []
   }
   await stratumStore.getState().save(row)
   if (isDepthInverted(row)) {
@@ -273,10 +277,18 @@ async function applyBatchType(): Promise<void> {
           <span class="mono">{{ trenchLabel(row.trenchId) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="单位号" width="110">
+      <el-table-column label="单位号" width="150">
         <template #default="{ row }: { row: Stratum }">
           <span class="mono">{{ row.code }}</span>
           <el-tag v-if="duplicatedOf(row)" type="warning" size="small" effect="dark" class="mini">重复</el-tag>
+          <el-tooltip
+            v-for="former in row.formerCodes ?? []"
+            :key="former"
+            :content="`曾用号 ${former}（实物标签与旧记录可按此检索）`"
+            placement="top"
+          >
+            <el-tag type="info" size="small" effect="plain" class="mini former-tag">{{ former }}</el-tag>
+          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column label="类型" width="120">
@@ -406,6 +418,9 @@ async function applyBatchType(): Promise<void> {
 }
 .mini {
   margin-left: 4px;
+}
+.former-tag {
+  font-size: 10px;
 }
 .warn {
   margin: 0;

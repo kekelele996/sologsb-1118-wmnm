@@ -1,22 +1,24 @@
 import { onUnmounted, reactive } from 'vue'
 import type { StoreApi } from 'zustand/vanilla'
 import Dexie, { type Table } from 'dexie'
-import type { Artifact, Relation, Stratum, Trench } from '@/types'
+import type { Artifact, MergeJob, Relation, RelationReview, Stratum, Trench } from '@/types'
 
 /** IndexedDB 数据结构版本号 */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export interface MetaRow {
   key: string
   value: number
 }
 
-/** Dexie 封装：探方 / 地层单位 / 出土物 / 层位关系 四张表 + 元数据表 */
+/** Dexie 封装：探方 / 地层单位 / 出土物 / 层位关系 四张表 + 元数据、合并任务、待裁定关系 */
 class TrenchLogDb extends Dexie {
   trenches!: Table<Trench, string>
   strata!: Table<Stratum, string>
   artifacts!: Table<Artifact, string>
   relations!: Table<Relation, string>
+  mergeJobs!: Table<MergeJob, string>
+  relationReviews!: Table<RelationReview, string>
   meta!: Table<MetaRow, string>
 
   constructor() {
@@ -47,6 +49,27 @@ class TrenchLogDb extends Dexie {
             }
             if (!Array.isArray(stratum.inclusions)) {
               stratum.inclusions = []
+            }
+          })
+      })
+    // v3：支持探方合并——地层单位补「曾用号」，新增合并任务表与跨方关系待裁定表
+    this.version(SCHEMA_VERSION)
+      .stores({
+        trenches: 'id, code, area, backfilled',
+        strata: 'id, trenchId, code, type, topDepth',
+        artifacts: 'id, stratumId, code, category, date',
+        relations: 'id, unitAId, unitBId, type, basis',
+        mergeJobs: 'id, status, keeperTrenchId, absorbedTrenchId, updatedAt',
+        relationReviews: 'id, mergeJobId, status, unitAId, unitBId',
+        meta: 'key'
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<Stratum, string>('strata')
+          .toCollection()
+          .modify((stratum) => {
+            if (!Array.isArray(stratum.formerCodes)) {
+              stratum.formerCodes = []
             }
           })
       })
@@ -134,7 +157,8 @@ export async function seedDemoData(): Promise<void> {
       inclusions: ['陶片', '炭屑'],
       formation: '近现代耕土层',
       date: today,
-      drawingNo: 'T0501-北壁-01'
+      drawingNo: 'T0501-北壁-01',
+      formerCodes: []
     },
     {
       id: 'st_0501_l2',
@@ -148,7 +172,8 @@ export async function seedDemoData(): Promise<void> {
       inclusions: ['陶片', '骨'],
       formation: '汉代文化层',
       date: today,
-      drawingNo: 'T0501-北壁-02'
+      drawingNo: 'T0501-北壁-02',
+      formerCodes: []
     },
     {
       id: 'st_0501_h12',
@@ -162,7 +187,8 @@ export async function seedDemoData(): Promise<void> {
       inclusions: ['陶片', '骨', '炭屑'],
       formation: '生活垃圾坑',
       date: today,
-      drawingNo: 'T0501-H12-平剖面'
+      drawingNo: 'T0501-H12-平剖面',
+      formerCodes: []
     },
     {
       id: 'st_0502_l1',
@@ -176,7 +202,8 @@ export async function seedDemoData(): Promise<void> {
       inclusions: ['陶片'],
       formation: '耕土层',
       date: today,
-      drawingNo: 'T0502-西壁-01'
+      drawingNo: 'T0502-西壁-01',
+      formerCodes: []
     }
   ])
 
@@ -229,6 +256,15 @@ export async function seedDemoData(): Promise<void> {
       basis: '剖面观察',
       recorder: '方铭',
       note: 'L01 叠压 L02，界面清晰'
+    },
+    {
+      id: 'rl_003',
+      unitAId: 'st_0502_l1',
+      type: '叠压',
+      unitBId: 'st_0501_l2',
+      basis: '剖面观察',
+      recorder: '方铭',
+      note: '重新布方前跨探方记录：T0502 耕土层与 T0501 第②层的衔接，合并后需复核'
     }
   ])
 }

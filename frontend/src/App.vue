@@ -6,19 +6,28 @@ import { trenchStore } from '@/stores/trenchStore'
 import { stratumStore } from '@/stores/stratumStore'
 import { artifactStore } from '@/stores/artifactStore'
 import { relationStore } from '@/stores/relationStore'
+import { mergeStore } from '@/stores/mergeStore'
 
 const route = useRoute()
 const trenchState = useStore(trenchStore)
 const stratumState = useStore(stratumStore)
 const artifactState = useStore(artifactStore)
 const relationState = useStore(relationStore)
+const mergeState = useStore(mergeStore)
+
+const draftCount = computed(
+  () => mergeState.mergeJobs.filter((item) => item.status === 'draft').length
+)
+const pendingReviewCount = computed(
+  () => mergeState.reviews.filter((item) => item.status === 'pending').length
+)
 
 const menus = [
-  { path: '/trenches', label: '探方清单', icon: 'Grid' },
-  { path: '/strata', label: '地层单位编目', icon: 'Files' },
-  { path: '/artifacts', label: '出土物登记', icon: 'Box' },
-  { path: '/relations', label: '层位关系', icon: 'Share' },
-  { path: '/sections', label: '四壁剖面示意', icon: 'DataLine' }
+  { path: '/trenches', label: '探方清单', icon: 'Grid', badge: () => draftCount.value },
+  { path: '/strata', label: '地层单位编目', icon: 'Files', badge: () => 0 },
+  { path: '/artifacts', label: '出土物登记', icon: 'Box', badge: () => 0 },
+  { path: '/relations', label: '层位关系', icon: 'Share', badge: () => pendingReviewCount.value },
+  { path: '/sections', label: '四壁剖面示意', icon: 'DataLine', badge: () => 0 }
 ]
 
 const activeMenu = computed(() => menus.find((item) => route.path.startsWith(item.path))?.path ?? '/trenches')
@@ -35,6 +44,7 @@ onMounted(async () => {
   await stratumStore.getState().hydrate()
   await artifactStore.getState().hydrate()
   await relationStore.getState().hydrate()
+  await mergeStore.getState().hydrate()
 })
 </script>
 
@@ -52,6 +62,7 @@ onMounted(async () => {
         <el-menu-item v-for="item in menus" :key="item.path" :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.label }}</span>
+          <el-badge v-if="item.badge() > 0" :value="item.badge()" class="menu-badge" type="warning" />
         </el-menu-item>
       </el-menu>
       <div class="stat-box">
@@ -126,6 +137,13 @@ onMounted(async () => {
 }
 :deep(.menu .el-menu-item:hover) {
   background: #5c452b;
+}
+.menu-badge {
+  margin-left: auto;
+}
+.menu-badge :deep(.el-badge__content) {
+  background: #c9a227;
+  border: none;
 }
 .stat-box {
   margin-top: auto;

@@ -4,19 +4,23 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Trench } from '@/types'
 import { TRENCH_SIZES, findTrenchConflict, trenchKey } from '@/types'
 import TrenchTag from '@/components/common/TrenchTag.vue'
+import MergeTrenchesDialog from '@/components/merge/MergeTrenchesDialog.vue'
 import { useStore } from '@/hooks/usePersistentStore'
 import { trenchStore } from '@/stores/trenchStore'
 import { stratumStore } from '@/stores/stratumStore'
 import { artifactStore } from '@/stores/artifactStore'
 import { relationStore } from '@/stores/relationStore'
+import { mergeStore } from '@/stores/mergeStore'
 import { uid } from '@/utils/id'
 
 const trenchState = useStore(trenchStore)
 const stratumState = useStore(stratumStore)
 const artifactState = useStore(artifactStore)
 const relationState = useStore(relationStore)
+const mergeState = useStore(mergeStore)
 
 const dialogVisible = ref(false)
+const resumeJobId = ref<string | null>(null)
 const editingId = ref<string | null>(null)
 const filterArea = ref('')
 
@@ -37,6 +41,21 @@ const areas = computed(() => Array.from(new Set(trenchState.trenches.map((item) 
 const visible = computed(() =>
   filterArea.value ? trenchState.trenches.filter((item) => item.area === filterArea.value) : trenchState.trenches
 )
+
+/** 未完成的合并草稿（合并中途失败或关掉向导后可接着再并） */
+const draftJobs = computed(() => mergeState.mergeJobs.filter((item) => item.status === 'draft'))
+const resumeJob = computed(() => draftJobs.value.find((item) => item.id === resumeJobId.value) ?? null)
+const pendingReviewCount = computed(() => mergeState.reviews.filter((item) => item.status === 'pending').length)
+
+function openMerge(): void {
+  resumeJobId.value = null
+  dialogVisible.value = true
+}
+
+function openResume(jobId: string): void {
+  resumeJobId.value = jobId
+  dialogVisible.value = true
+}
 
 watch(
   () => trenchState.trenches.length,
@@ -160,7 +179,37 @@ async function remove(trench: Trench): Promise<void> {
       <el-button type="primary" @click="openCreate">
         <el-icon><Plus /></el-icon>新建探方
       </el-button>
+      <el-button type="warning" plain @click="openMerge">
+        <el-icon><Connection /></el-icon>合并探方
+      </el-button>
     </div>
+
+    <el-alert
+      v-for="job in draftJobs"
+      :key="job.id"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="draft-alert"
+    >
+      <template #title>
+        有未完成的探方合并：{{ job.keeperCode }} ← {{ job.absorbedCode }}
+        <span v-if="job.lastError" class="draft-error">（上次失败：{{ job.lastError }}；两个探方均已回滚，未受影响）</span>
+      </template>
+      <template #default>
+        <div class="draft-ops">
+          <el-button size="small" type="primary" @click="openResume(job.id)">继续合并</el-button>
+        </div>
+      </template>
+    </el-alert>
+    <el-alert
+      v-if="pendingReviewCount > 0 && draftJobs.length === 0"
+      type="info"
+      show-icon
+      :closable="false"
+      class="draft-alert"
+      :title="`有 ${pendingReviewCount} 条跨方关系等待整理员裁定（来自探方合并），请到「层位关系」页处理`"
+    />
 
     <div class="toolbar">
       <el-select v-model="filterArea" placeholder="全部发掘区" clearable style="width: 180px">
@@ -172,7 +221,19 @@ async function remove(trench: Trench): Promise<void> {
     <div class="card-grid">
       <el-card v-for="trench in visible" :key="trench.id" shadow="hover" class="trench-card">
         <div class="card-top">
-          <TrenchTag :trench="trench" />
+          <div class="card-tags">
+            <TrenchTag :trench="trench" />
+            <el-tag
+              v-for="code in trench.mergedFromCodes ?? []"
+              :key="code"
+              size="small"
+              type="warning"
+              effect="plain"
+              class="merged-tag"
+            >
+              已并入 {{ code }}
+            </el-tag>
+          </div>
           <el-tag :type="progressOf(trench).type" size="small" effect="plain">{{ progressOf(trench).label }}</el-tag>
         </div>
         <div class="metrics">
@@ -265,19 +326,39 @@ async function remove(trench: Trench): Promise<void> {
         <el-button type="primary" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+
+    <MergeTrenchesDialog v-model="dialogVisible" :job="resumeJob" />
   </div>
 </template>
 
 <style scoped>
+.draft-alert {
+  margin-bottom: 12px;
+}
+.draft-error {
+  color: #c0392b;
+}
+.draft-ops {
+  margin-top: 6px;
+}
 .trench-card {
   border-radius: 12px;
 }
 .card-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
+}
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.merged-tag {
+  font-size: 11px;
 }
 .metrics {
   display: grid;
